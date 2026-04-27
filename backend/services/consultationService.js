@@ -50,6 +50,46 @@ function isDemoPaymentEnabled() {
   return String(process.env.NODE_ENV || 'development').trim().toLowerCase() !== 'production';
 }
 
+/** MySQL TIME can surface from mysql2 as a string, Date, or other — normalize for JSON + UI. */
+function normalizePreferredTimeForApi(v) {
+  if (v == null || v === '') return null;
+  if (Buffer.isBuffer(v)) {
+    const s = v.toString('utf8').trim();
+    if (!s) return null;
+    return normalizePreferredTimeForApi(s);
+  }
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return null;
+    return (
+      String(v.getHours()).padStart(2, '0') +
+      `:${String(v.getMinutes()).padStart(2, '0')}` +
+      `:${String(v.getSeconds()).padStart(2, '0')}`
+    );
+  }
+  let s = String(v).trim();
+  if (!s) return null;
+  s = s.replace(/(\.\d+)$/, '');
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    return (
+      m[1].padStart(2, '0') +
+      `:${m[2].padStart(2, '0')}` +
+      `:${(m[3] != null ? m[3] : '0').padStart(2, '0')}`
+    );
+  }
+  if (s.length >= 19 && s.includes('T')) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) {
+      return (
+        String(d.getHours()).padStart(2, '0') +
+        `:${String(d.getMinutes()).padStart(2, '0')}` +
+        `:${String(d.getSeconds()).padStart(2, '0')}`
+      );
+    }
+  }
+  return null;
+}
+
 const STATUS_FLOW = Object.freeze({
   pending: new Set(['awaiting_payment', 'declined', 'cancelled']),
   awaiting_payment: new Set(['scheduled', 'cancelled']),
@@ -93,6 +133,7 @@ class ConsultationService {
         concern_title VARCHAR(150) NOT NULL,
         concern_message TEXT NOT NULL,
         preferred_date DATE NULL,
+        preferred_time TIME NULL,
         status ENUM('pending', 'accepted', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
         specialist_notes TEXT NULL,
         validated_products_text TEXT NULL,
@@ -200,6 +241,7 @@ class ConsultationService {
     await tryAlter('ALTER TABLE consultations ADD COLUMN payment_reference VARCHAR(128) NULL');
     await tryAlter('ALTER TABLE consultations ADD COLUMN payment_receipt_path VARCHAR(512) NULL');
     await tryAlter('ALTER TABLE consultations ADD COLUMN payment_submitted_at TIMESTAMP NULL');
+    await tryAlter('ALTER TABLE consultations ADD COLUMN preferred_time TIME NULL');
     await tryAlter('ALTER TABLE consultations ADD COLUMN meeting_url VARCHAR(512) NULL');
     await tryAlter('ALTER TABLE consultations ADD COLUMN decline_reason TEXT NULL');
     await tryAlter('ALTER TABLE consultations ADD COLUMN paid_verified_at TIMESTAMP NULL');
@@ -535,6 +577,7 @@ class ConsultationService {
       concernTitle: r.concern_title,
       concernMessage: r.concern_message,
       preferredDate: r.preferred_date,
+      preferredTime: normalizePreferredTimeForApi(r.preferred_time),
       status: r.status,
       specialistNotes: r.specialist_notes,
       validatedProductsText: r.validated_products_text,
@@ -655,6 +698,7 @@ class ConsultationService {
     const concernTitle = String(payload.concernTitle || '').trim();
     const concernMessage = String(payload.concernMessage || '').trim();
     const preferredDate = payload.preferredDate || null;
+    const preferredTimeRaw = payload.preferredTime != null ? String(payload.preferredTime).trim() : '';
     const specialistUserId = Number(payload.specialistUserId);
     if (!Number.isFinite(specialistUserId) || specialistUserId <= 0) {
       throw new Error('Choose a specialist for this consultation');
@@ -662,6 +706,21 @@ class ConsultationService {
 
     if (!concernTitle || !concernMessage) {
       throw new Error('Concern title and message are required');
+    }
+
+    if (!preferredDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(preferredDate))) {
+      throw new Error('Preferred date is required (YYYY-MM-DD)');
+    }
+    if (!preferredTimeRaw) {
+      throw new Error('Preferred time is required');
+    }
+    let preferredTime = null;
+    if (/^\d{2}:\d{2}$/.test(preferredTimeRaw)) {
+      preferredTime = `${preferredTimeRaw}:00`;
+    } else if (/^\d{2}:\d{2}:\d{2}$/.test(preferredTimeRaw)) {
+      preferredTime = preferredTimeRaw;
+    } else {
+      throw new Error('Preferred time must be HH:MM (24-hour)');
     }
 
     const [specRows] = await pool.query(
@@ -687,16 +746,26 @@ class ConsultationService {
 
     const [result] = await pool.query(
       `INSERT INTO consultations (
-         user_id, specialist_user_id, concern_title, concern_message, preferred_date,
+         user_id, specialist_user_id, concern_title, concern_message, preferred_date, preferred_time,
          amount_php, platform_fee_percent, status, payment_status
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'unpaid')`,
-      [userId, specialistUserId, concernTitle, concernMessage, preferredDate, amountPhp, PLATFORM_FEE_PERCENT]
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'unpaid')`,
+      [
+        userId,
+        specialistUserId,
+        concernTitle,
+        concernMessage,
+        preferredDate,
+        preferredTime,
+        amountPhp,
+        PLATFORM_FEE_PERCENT,
+      ]
     );
 
+    const prefSlot = `${preferredDate} ${preferredTimeRaw}`;
     await notificationService.createForUser(specialistUserId, {
       type: 'consultation_request',
       title: 'New consultation request',
-      message: `You have a new request: "${concernTitle}".`,
+      message: `You have a new request: "${concernTitle}" (preferred ${prefSlot}).`,
       linkUrl: '/consultations.html',
     });
     await notificationService.createForRoles(
@@ -704,7 +773,7 @@ class ConsultationService {
       {
         type: 'consultation_request',
         title: 'New consultation request',
-        message: `A user submitted "${concernTitle}".`,
+        message: `A user submitted "${concernTitle}" (preferred ${prefSlot}).`,
         linkUrl: '/consultations.html',
       },
       userId
@@ -720,7 +789,8 @@ class ConsultationService {
     await billingService.ensureSchema();
     const [rows] = await pool.query(
       `SELECT c.consultation_id, c.user_id, c.specialist_user_id, c.concern_title, c.concern_message,
-              c.preferred_date, c.status, c.specialist_notes, c.validated_products_text,
+              c.preferred_date,
+              TIME_FORMAT(c.preferred_time, '%H:%i:%s') AS preferred_time, c.status, c.specialist_notes, c.validated_products_text,
               c.final_recommendation, c.prescription_summary, c.prescription_products_text,
               c.prescription_plan_text, c.prescription_issued_at, c.created_at, c.updated_at,
               c.amount_php, c.platform_fee_percent, c.payment_status, c.payment_reference,

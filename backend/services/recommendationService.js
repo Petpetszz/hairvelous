@@ -313,6 +313,14 @@ class RecommendationService {
   scoreProduct(product, context) {
     const { categories, targetCategories, hairType, scalpCondition, issues, budget, productType } = context;
     let score = 0;
+    const normalizedCategories = Array.isArray(categories)
+      ? categories.map((c) => String(c || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    const issueKeys = new Set(
+      (Array.isArray(issues) ? issues : [])
+        .map((issue) => mapIssueToCategoryKey(issue))
+        .filter(Boolean)
+    );
 
     // Category matching (primary: +5, secondary: +3)
     const categoryMap = this.getCategoryMap();
@@ -320,8 +328,8 @@ class RecommendationService {
       const key = mapIssueToCategoryKey(issue);
       const mapping = key ? categoryMap[key] : null;
       if (mapping) {
-        if (categories.includes(mapping.primary)) score += 5;
-        if (mapping.secondary && categories.includes(mapping.secondary)) score += 3;
+        if (normalizedCategories.includes(String(mapping.primary || '').toLowerCase())) score += 5;
+        if (mapping.secondary && normalizedCategories.includes(String(mapping.secondary || '').toLowerCase())) score += 3;
       }
     });
 
@@ -333,7 +341,7 @@ class RecommendationService {
 
     // Scalp condition compatibility
     if (scalpCondition) {
-      const scalpCompatibility = this.getScalpCompatibility(product, scalpCondition, categories);
+      const scalpCompatibility = this.getScalpCompatibility(product, scalpCondition, normalizedCategories);
       score += scalpCompatibility;
     }
 
@@ -344,6 +352,30 @@ class RecommendationService {
     // Budget filtering (penalize if outside budget, but don't exclude)
     const budgetMatch = this.getBudgetMatch(parseFloat(product.price), budget);
     score += budgetMatch;
+
+    // Strong profile-priority boosts/penalties so scenario changes are visibly different in demos.
+    const hasCat = (cat) => normalizedCategories.includes(String(cat || '').toLowerCase());
+    const hasFlakingIssue = issueKeys.has('flaking') || issueKeys.has('dandruff');
+    const hasOilIssue = issueKeys.has('oiliness') || issueKeys.has('oily');
+    const hasDryIssue = issueKeys.has('dryness');
+    const hasFrizzIssue = issueKeys.has('frizz');
+    const sc = String(scalpCondition || '').toLowerCase();
+
+    if (hasFlakingIssue) {
+      if (hasCat('anti-dandruff')) score += 6;
+      if (hasCat('clarifying/oily scalp') && sc === 'dry') score -= 2;
+    }
+    if (hasOilIssue || sc === 'oily') {
+      if (hasCat('clarifying/oily scalp')) score += 6;
+      if (hasCat('moisturizing')) score -= 2;
+    }
+    if (hasDryIssue || sc === 'dry') {
+      if (hasCat('moisturizing')) score += 5;
+      if (hasCat('clarifying/oily scalp')) score -= 3;
+    }
+    if (hasFrizzIssue) {
+      if (hasCat('anti-frizz')) score += 4;
+    }
 
     return score;
   }

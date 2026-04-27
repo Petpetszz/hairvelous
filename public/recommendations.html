@@ -72,7 +72,10 @@
         <button id="btn-mode-recommended" type="button" class="px-4 py-1.5 rounded-md text-sm font-medium bg-violet-600 text-white">Recommended</button>
         <button id="btn-mode-all" type="button" class="px-4 py-1.5 rounded-md text-sm font-medium text-slate-300 hover:text-white">All Products</button>
       </div>
-      <p id="mode-hint" class="text-xs text-slate-400">Recommended items are prioritized from your hair profile.</p>
+      <div class="text-right">
+        <p id="mode-hint" class="text-xs text-slate-400">Recommended items are prioritized from your hair profile.</p>
+        <p id="assessment-stamp" class="text-[11px] text-slate-500 mt-1">Based on latest assessment profile.</p>
+      </div>
     </div>
 
     <div id="preferences-panel" class="flex flex-wrap items-center gap-4 mb-4">
@@ -96,6 +99,13 @@
         </select>
       </div>
       <button id="btn-update-recs" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-1.5 rounded-lg text-sm">Update</button>
+    </div>
+    <div class="mb-5 rounded-lg border border-violet-500/30 bg-violet-950/20 p-3">
+      <p class="text-xs text-violet-200 font-medium mb-1">Feature Access Legend</p>
+      <p class="text-xs text-slate-300">
+        Free: core recommendations and basic routine logging.
+        <span class="text-violet-200">Pro:</span> advanced analytics and specialist messaging access.
+      </p>
     </div>
 
     <div class="flex flex-col lg:flex-row gap-8">
@@ -229,6 +239,13 @@
         return '<div class="text-emerald-400/95 text-xs mb-3">Profile-matched recommendation</div>';
       }
       return '<div class="text-slate-500 text-xs mb-3">Additional catalog option</div>';
+    }
+
+    function conciseReasonText(p) {
+      const raw = String((p && p.reason) || '').trim();
+      if (!raw) return 'Matched from your latest assessment profile.';
+      const firstSentence = raw.split('.').map((x) => x.trim()).filter(Boolean)[0] || raw;
+      return firstSentence.length > 90 ? firstSentence.slice(0, 87) + '...' : firstSentence;
     }
 
     function expiryText(p) {
@@ -394,6 +411,7 @@
             <h3 class="font-semibold text-white mb-1 line-clamp-2 min-h-[3rem]">${escapeHtml(p.name)}</h3>
             <div class="text-slate-400 text-xs mb-1 min-h-[1rem]">${expiryText(p) ? escapeHtml(expiryText(p)) : ''}</div>
             ${profileMatchLineHtml(p)}
+            <div class="text-[11px] text-violet-200/90 mb-2 min-h-[1rem]">Matched: ${escapeHtml(conciseReasonText(p))}</div>
             <div class="text-sm text-slate-400 mt-auto">Price may vary by store.</div>
             <div class="mt-3">
               <a
@@ -656,11 +674,18 @@
     async function loadRecommendations() {
       const fallbackNotice = document.getElementById('fallback-notice');
       if (fallbackNotice) fallbackNotice.classList.add('hidden');
+      const assessmentStamp = document.getElementById('assessment-stamp');
+      if (assessmentStamp) {
+        assessmentStamp.textContent = 'Based on latest assessment profile.';
+      }
 
       try {
         const budget = document.getElementById('budget')?.value || 'medium';
         const productType = document.getElementById('productType')?.value || 'all';
         const data = await api('/recommendations/profile?budget=' + budget + '&productType=' + productType);
+        if (assessmentStamp) {
+          assessmentStamp.textContent = 'Based on latest assessment profile • Updated ' + new Date().toLocaleString();
+        }
         hasRecommendationProfile = true;
         recommendedProducts = (data.recommendations || []).map((p) => normalizeProductToRecommendation({
           ...p,

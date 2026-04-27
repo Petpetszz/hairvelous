@@ -18,3 +18,12 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
 };
+
+afterAll(async () => {
+  try {
+    const pool = require('../config/db');
+    await pool.end();
+  } catch (_err) {
+    // Ignore teardown failures in tests.
+  }
+});

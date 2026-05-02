@@ -282,7 +282,7 @@ class AssessmentService {
 
     await this.ensureTables();
     const [rows] = await pool.query(
-      'SELECT assessment_id FROM hair_assessment WHERE user_id = ? ORDER BY date_taken DESC LIMIT 1',
+      'SELECT assessment_id FROM hair_assessment WHERE user_id = ? ORDER BY date_taken DESC, assessment_id DESC LIMIT 1',
       [userId]
     );
     if (!rows.length) return null;
@@ -305,6 +305,24 @@ class AssessmentService {
   }
 
   /**
+   * Get total assessment attempts for a user.
+   */
+  async getAssessmentCount(userId) {
+    if (process.env.SKIP_DB_FOR_TESTING === 'true') {
+      return Object.values(_mockStore.assessments)
+        .filter((a) => a && a.userId === userId)
+        .length;
+    }
+
+    await this.ensureTables();
+    const [rows] = await pool.query(
+      'SELECT COUNT(*) AS total FROM hair_assessment WHERE user_id = ?',
+      [userId]
+    );
+    return Number((rows && rows[0] && rows[0].total) || 0);
+  }
+
+  /**
    * Latest assessment Q&A rows for Hair AI context
    */
   async getLatestAssessmentAnswers(userId) {
@@ -317,6 +335,65 @@ class AssessmentService {
       [latest.assessmentId]
     );
     return (rows || []).map((r) => ({ question: r.question, answer: r.answer }));
+  }
+
+  async verifyCapture(userId, { imageBase64, shotType }) {
+    const allowedShots = new Set(['top_crown', 'back_head', 'left_side', 'right_side']);
+    const shot = String(shotType || '').trim().toLowerCase();
+    if (!allowedShots.has(shot)) {
+      const e = new Error('Invalid shotType');
+      e.status = 400;
+      throw e;
+    }
+    const raw = String(imageBase64 || '');
+    const m = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!m) {
+      const e = new Error('imageBase64 must be a valid data URL image');
+      e.status = 400;
+      throw e;
+    }
+    const mimeType = m[1].toLowerCase();
+    const b64 = m[2];
+    if (!/^image\/(jpeg|jpg|png|webp|gif)$/.test(mimeType)) {
+      const e = new Error('Unsupported image format');
+      e.status = 400;
+      throw e;
+    }
+    const buf = Buffer.from(b64, 'base64');
+    const bytes = buf.length;
+    if (bytes < 28 * 1024) {
+      return {
+        pass: false,
+        checks: {
+          fileSize: { pass: false, value: bytes, min: 28 * 1024 },
+        },
+        tips: ['Move closer to the scalp area and capture with clearer detail.'],
+      };
+    }
+    if (bytes > 12 * 1024 * 1024) {
+      return {
+        pass: false,
+        checks: {
+          fileSize: { pass: false, value: bytes, max: 12 * 1024 * 1024 },
+        },
+        tips: ['Capture at normal camera quality; the image is too large to process.'],
+      };
+    }
+    try {
+      const hairAiService = require('./hairAiService');
+      const aiCheck = await hairAiService.analyzeCaptureQuality(userId, raw, shot);
+      if (aiCheck && typeof aiCheck.pass === 'boolean') return aiCheck;
+    } catch (_e) {
+      // Fallback below keeps the flow available if AI verification is temporarily unavailable.
+    }
+    return {
+      pass: true,
+      checks: {
+        fileSize: { pass: true, value: bytes },
+        aiVerifier: { pass: true, mode: 'fallback' },
+      },
+      tips: [],
+    };
   }
 }
 

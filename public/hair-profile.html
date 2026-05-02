@@ -38,6 +38,12 @@
         <div id="profile-note" class="text-slate-300 text-sm bg-violet-900/20 border border-violet-700/40 rounded-lg p-4">
           Based on your answers, we prepared recommendations tailored to your current hair and scalp needs.
         </div>
+
+        <div id="ai-analysis-section" class="hidden bg-slate-900/55 border border-violet-700/50 rounded-lg p-4">
+          <h3 class="text-violet-300 font-semibold mb-1">AI Hair Analysis</h3>
+          <p class="text-slate-500 text-xs mb-3">Visible only when a guided capture/photo was analyzed.</p>
+          <div id="ai-content" class="space-y-3 text-sm text-slate-300"></div>
+        </div>
       </div>
     </div>
 
@@ -63,6 +69,55 @@
       const d = document.createElement('div');
       d.textContent = s || '';
       return d.innerHTML;
+    }
+
+    function displayAiResults(ai) {
+      if (!ai || !ai.conditionName) return false;
+      const section = document.getElementById('ai-analysis-section');
+      const content = document.getElementById('ai-content');
+      if (!section || !content) return false;
+      section.classList.remove('hidden');
+      let html = `
+        <div class="grid gap-2 sm:grid-cols-2">
+          <p><span class="text-slate-400">Condition:</span> <span class="text-white">${esc(ai.conditionName)}</span>${ai.confidence ? ` <span class="text-violet-300">(${esc(String(ai.confidence))}%)</span>` : ''}</p>
+          <p><span class="text-slate-400">Severity:</span> <span class="text-white capitalize">${esc(ai.severity || 'Unknown')}</span></p>
+        </div>
+        <p class="text-slate-200">${esc(ai.summary || '')}</p>
+      `;
+      if (Array.isArray(ai.careTips) && ai.careTips.length) {
+        html += '<p class="text-violet-200 font-medium">Care Tips</p><ul class="list-disc list-inside space-y-1">';
+        ai.careTips.forEach((tip) => { html += `<li>${esc(tip)}</li>`; });
+        html += '</ul>';
+      }
+      if (ai.disclaimer) {
+        html += `<p class="text-[11px] text-slate-500 italic">${esc(ai.disclaimer)}</p>`;
+      }
+      content.innerHTML = html;
+      return true;
+    }
+
+    function tryParseAiPayload(raw) {
+      if (!raw) return null;
+      if (typeof raw === 'object' && raw.conditionName) return raw;
+      const s = String(raw || '').trim();
+      if (!s || s[0] !== '{') return null;
+      try {
+        const parsed = JSON.parse(s);
+        return parsed && parsed.conditionName ? parsed : null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    async function loadLatestAiFromPhotos() {
+      try {
+        const data = await api('/photos');
+        const rows = Array.isArray(data && data.photos) ? data.photos : [];
+        if (!rows.length) return null;
+        return tryParseAiPayload(rows[0].aiResult);
+      } catch (_e) {
+        return null;
+      }
     }
 
     async function loadProfile() {
@@ -101,6 +156,17 @@
 
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('profile-content').classList.remove('hidden');
+        let renderedAi = false;
+        const aiResultStr = getHairAiResultCache();
+        if (aiResultStr) {
+          try {
+            renderedAi = displayAiResults(JSON.parse(aiResultStr));
+          } catch (_e) {}
+        }
+        if (!renderedAi) {
+          const latestAi = await loadLatestAiFromPhotos();
+          if (latestAi) displayAiResults(latestAi);
+        }
       } catch (err) {
         document.getElementById('loading').textContent = (err && err.error) || 'Failed to load profile summary.';
       }

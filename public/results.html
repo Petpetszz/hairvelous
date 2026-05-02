@@ -37,9 +37,10 @@
         <p class="text-amber-200 text-sm"><strong>Important:</strong> Based on your answers, we recommend consulting a hair or healthcare professional for personalized advice.</p>
       </div>
 
-      <div class="flex gap-4">
+      <div class="flex flex-wrap gap-4">
         <a href="/recommendations.html" class="bg-violet-600 hover:bg-violet-500 text-white px-6 py-3 rounded-lg">View Recommendations →</a>
         <a href="/assessment.html" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg border border-slate-600">Retake Assessment</a>
+        <a id="btn-assessment-report" href="/report.html?type=assessment" class="bg-cyan-700 hover:bg-cyan-600 text-white px-6 py-3 rounded-lg border border-cyan-600/40">Generate Report</a>
       </div>
     </div>
   </main>
@@ -64,6 +65,14 @@
         if (!data || !data.hairType) {
           document.getElementById('results-content').innerHTML = '<p class="text-slate-400">No assessment results found. <a href="/assessment.html" class="text-violet-400">Take an assessment</a></p>';
           return;
+        }
+
+        const reportBtn = document.getElementById('btn-assessment-report');
+        if (reportBtn) {
+          const rid = assessmentId || data.assessmentId || '';
+          reportBtn.href = rid
+            ? `/report.html?type=assessment&assessmentId=${encodeURIComponent(rid)}`
+            : '/report.html?type=assessment';
         }
 
         // Profile summary
@@ -94,15 +103,20 @@
           document.getElementById('severity-warning').classList.remove('hidden');
         }
         
-        // Load AI analysis results from localStorage
-        const aiResultStr = localStorage.getItem('hairAiResult');
+        // Load AI analysis from localStorage first, then fallback to latest photo ai_result in DB.
+        let renderedAi = false;
+        const aiResultStr = getHairAiResultCache();
         if (aiResultStr) {
           try {
             const aiResult = JSON.parse(aiResultStr);
-            displayAiResults(aiResult);
+            if (displayAiResults(aiResult)) renderedAi = true;
           } catch (e) {
             console.error('Failed to parse AI result:', e);
           }
+        }
+        if (!renderedAi) {
+          const latestAi = await loadLatestAiFromPhotos();
+          if (latestAi) displayAiResults(latestAi);
         }
       } catch (err) {
         showToast(err.error || 'Failed to load results', 'error');
@@ -116,10 +130,34 @@
       return d.innerHTML;
     }
 
+    function tryParseAiPayload(raw) {
+      if (!raw) return null;
+      if (typeof raw === 'object' && raw.conditionName) return raw;
+      const s = String(raw || '').trim();
+      if (!s || s[0] !== '{') return null;
+      try {
+        const parsed = JSON.parse(s);
+        return parsed && parsed.conditionName ? parsed : null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    async function loadLatestAiFromPhotos() {
+      try {
+        const data = await api('/photos');
+        const rows = Array.isArray(data && data.photos) ? data.photos : [];
+        if (!rows.length) return null;
+        return tryParseAiPayload(rows[0].aiResult);
+      } catch (_e) {
+        return null;
+      }
+    }
+
     function displayAiResults(ai) {
       const section = document.getElementById('ai-analysis-section');
       const content = document.getElementById('ai-content');
-      if (!ai || !ai.conditionName) return;
+      if (!ai || !ai.conditionName) return false;
 
       section.classList.remove('hidden');
 
@@ -180,6 +218,7 @@
       }
 
       content.innerHTML = html;
+      return true;
     }
 
     loadResults();

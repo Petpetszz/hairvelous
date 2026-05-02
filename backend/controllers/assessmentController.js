@@ -8,6 +8,31 @@ const recommendationService = require('../services/recommendationService');
 const { validationResult } = require('express-validator');
 
 class AssessmentController {
+  async getCount(req, res, next) {
+    try {
+      const count = await assessmentService.getAssessmentCount(req.user.userId);
+      res.json({ count });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async verifyCapture(req, res, next) {
+    try {
+      const { imageBase64, shotType } = req.body || {};
+      if (!imageBase64) {
+        return res.status(400).json({ error: 'imageBase64 is required' });
+      }
+      if (!shotType) {
+        return res.status(400).json({ error: 'shotType is required' });
+      }
+      const result = await assessmentService.verifyCapture(req.user.userId, { imageBase64, shotType });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async createAssessment(req, res, next) {
     try {
       const { assessmentId } = await assessmentService.createAssessment(req.user.userId);

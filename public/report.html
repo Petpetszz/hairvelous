@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hairvelous Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Outfit', sans-serif; }
+    @media print {
+      #report-actions, #nav-placeholder { display: none !important; }
+      body { background: #fff !important; color: #111 !important; }
+      .report-card { border-color: #ddd !important; background: #fff !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <div id="nav-placeholder"></div>
+  <main class="max-w-4xl mx-auto px-4 py-8">
+    <div id="report-actions" class="mb-4 flex flex-wrap gap-2">
+      <button id="btn-print" class="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-500">Print / Save PDF</button>
+      <a id="btn-back" href="/dashboard.html" class="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Back</a>
+    </div>
+    <section class="report-card rounded-xl border border-slate-700 bg-slate-800/50 p-6">
+      <h1 id="report-title" class="text-2xl font-bold text-white">Hairvelous Report</h1>
+      <p id="report-subtitle" class="mt-1 text-sm text-slate-400">Preparing report...</p>
+      <div id="report-content" class="mt-6 space-y-4 text-sm text-slate-200"></div>
+    </section>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    if (!requireAuth()) { /* redirects */ }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+
+    function fmtDate(v) {
+      if (!v) return '—';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return String(v);
+      return d.toLocaleString();
+    }
+
+    function block(label, value) {
+      return `<p><span class="text-slate-400">${esc(label)}:</span> <span class="text-white">${esc(value || '—')}</span></p>`;
+    }
+
+    async function renderAssessmentReport(params) {
+      const assessmentId = params.get('assessmentId');
+      let data = null;
+      if (assessmentId) data = await api('/assessments/' + assessmentId + '/results');
+      else data = await api('/assessments/latest/results');
+      if (!data || !data.hairType) {
+        document.getElementById('report-content').innerHTML = '<p class="text-slate-300">No assessment report data found.</p>';
+        return;
+      }
+
+      let ai = null;
+      const aiRaw = getHairAiResultCache();
+      if (aiRaw) {
+        try { ai = JSON.parse(aiRaw); } catch (_e) {}
+      }
+      if (!ai) {
+        try {
+          const photos = await api('/photos');
+          const row = Array.isArray(photos.photos) ? photos.photos[0] : null;
+          if (row && row.aiResult) ai = typeof row.aiResult === 'string' ? JSON.parse(row.aiResult) : row.aiResult;
+        } catch (_e) {}
+      }
+
+      document.getElementById('report-title').textContent = 'Assessment Report';
+      document.getElementById('report-subtitle').textContent = 'Generated: ' + fmtDate(new Date());
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-violet-300">Profile Summary</h2>
+          ${block('Hair Type', data.hairType)}
+          ${block('Scalp Condition', data.scalpCondition)}
+          ${block('Detected Indicators', (data.issuesDetected || []).join(', ') || 'None')}
+          ${block('Summary', data.summaryText || '—')}
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">AI Analysis</h2>
+          ${block('Condition', ai && ai.conditionName)}
+          ${block('Severity', ai && ai.severity)}
+          ${block('Confidence', ai && ai.confidence ? `${ai.confidence}%` : '—')}
+          ${block('AI Summary', ai && ai.summary)}
+          ${block('Disclaimer', ai && ai.disclaimer)}
+        </div>
+      `;
+    }
+
+    async function renderConsultationReport(params) {
+      const consultationId = Number(params.get('consultationId') || 0);
+      const payload = await api('/consultations');
+      const list = Array.isArray(payload.consultations) ? payload.consultations : [];
+      const c = list.find((x) => Number(x.consultationId) === consultationId) || null;
+      if (!c) {
+        document.getElementById('report-content').innerHTML = '<p class="text-slate-300">Consultation report not found or inaccessible.</p>';
+        return;
+      }
+
+      document.getElementById('report-title').textContent = 'Consultation Report';
+      document.getElementById('report-subtitle').textContent = `Reference #${c.consultationId} • Generated: ${fmtDate(new Date())}`;
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-violet-300">Case Details</h2>
+          ${block('Title', c.concernTitle)}
+          ${block('Status', c.status)}
+          ${block('Client', c.userName || '—')}
+          ${block('Specialist', c.specialistName || '—')}
+          ${block('Preferred Date', c.preferredDate || '—')}
+          ${block('Preferred Time', c.preferredTime || '—')}
+          ${block('Concern Message', c.concernMessage || '—')}
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">Specialist Notes & Plan</h2>
+          ${block('Specialist Notes', c.specialistNotes)}
+          ${block('Prescription Summary', c.prescriptionSummary)}
+          ${block('Recommended Products', c.prescriptionProductsText)}
+          ${block('Prescription Plan', c.prescriptionPlanText)}
+          ${block('Final Recommendation', c.finalRecommendation)}
+          ${block('Prescription Issued At', fmtDate(c.prescriptionIssuedAt))}
+        </div>
+      `;
+    }
+
+    function computeStreakDays(logs) {
+      const dates = [...new Set((logs || []).map((l) => String(l.dateLogged || '').slice(0, 10)).filter(Boolean))]
+        .sort()
+        .reverse();
+      if (!dates.length) return 0;
+      let streak = 1;
+      let cursor = new Date(dates[0]);
+      if (Number.isNaN(cursor.getTime())) return 0;
+      for (let i = 1; i < dates.length; i += 1) {
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1);
+        const expected = cursor.toISOString().slice(0, 10);
+        if (dates[i] !== expected) break;
+        streak += 1;
+      }
+      return streak;
+    }
+
+    function summarizeTrend(logs) {
+      const feelCounts = { improving: 0, stable: 0, worse: 0 };
+      (logs || []).forEach((l) => {
+        const notes = String((l && l.notes) || '');
+        const m = notes.match(/\[Hair feel:\s*([^\]]+)\]/i);
+        if (!m) return;
+        const key = String(m[1] || '').trim().toLowerCase();
+        if (feelCounts[key] != null) feelCounts[key] += 1;
+      });
+      if (feelCounts.improving > feelCounts.stable && feelCounts.improving >= feelCounts.worse) {
+        return 'Improving trend based on recent log notes.';
+      }
+      if (feelCounts.worse > feelCounts.improving && feelCounts.worse > feelCounts.stable) {
+        return 'Needs attention: several logs indicate worsening feel.';
+      }
+      if (feelCounts.stable > 0 || feelCounts.improving > 0 || feelCounts.worse > 0) {
+        return 'Mostly stable trend with mixed routine outcomes.';
+      }
+      return 'Trend is based on consistency of logs; add hair-feel notes for richer progress tracking.';
+    }
+
+    async function renderRoutineReport() {
+      const [logsPayload, progressPayload] = await Promise.all([
+        api('/routine/logs?limit=200'),
+        api('/routine/progress?weeks=8').catch(() => ({ summary: [] })),
+      ]);
+      const logs = Array.isArray(logsPayload && logsPayload.logs) ? logsPayload.logs : [];
+      const progressRows = Array.isArray(progressPayload && progressPayload.summary) ? progressPayload.summary : [];
+      const withMedia = logs.filter((l) => !!(l && l.mediaPath)).length;
+      const streak = computeStreakDays(logs);
+      const byActivity = {};
+      logs.forEach((l) => {
+        const k = String((l && l.activityType) || 'Unspecified').trim() || 'Unspecified';
+        byActivity[k] = (byActivity[k] || 0) + 1;
+      });
+      const topActivities = Object.entries(byActivity)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => `${name} (${count})`)
+        .join(', ') || 'No activity logs yet';
+      const trend = summarizeTrend(logs);
+
+      document.getElementById('report-title').textContent = 'Routine Tracker Report';
+      document.getElementById('report-subtitle').textContent = 'Generated: ' + fmtDate(new Date());
+      document.getElementById('btn-back').href = '/tracker.html';
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-violet-300">Routine Summary</h2>
+          ${block('Total Logs', String(logs.length))}
+          ${block('Current Streak', `${streak} day${streak === 1 ? '' : 's'}`)}
+          ${block('Logs With Media', String(withMedia))}
+          ${block('Top Activities', topActivities)}
+          ${block('Progress Insight', trend)}
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">Weekly Progress</h2>
+          ${
+            progressRows.length
+              ? `<div class="space-y-1">
+                  ${progressRows.slice(0, 8).map((row) => `<p>${esc(String(row.weekStart || row.week || 'Week'))}: <span class="text-white">${esc(String(row.count || row.totalLogs || 0))} log(s)</span></p>`).join('')}
+                </div>`
+              : '<p class="text-slate-400">No weekly progress rows available yet.</p>'
+          }
+        </div>
+      `;
+    }
+
+    async function renderSpecialistAnalyticsReport() {
+      const data = await api('/consultations/specialist/analytics');
+      const totals = data && data.totals ? data.totals : {};
+      const statuses = Array.isArray(data && data.statusCounts) ? data.statusCounts : [];
+      const monthly = Array.isArray(data && data.monthly) ? data.monthly : [];
+      const clients = Array.isArray(data && data.clients) ? data.clients : [];
+
+      document.getElementById('report-title').textContent = 'Specialist Analytics Report';
+      document.getElementById('report-subtitle').textContent = 'Generated: ' + fmtDate(new Date());
+      document.getElementById('btn-back').href = '/specialist_dashboard.html';
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-violet-300">Overview</h2>
+          ${block('Distinct Clients', String(totals.distinctClients || 0))}
+          ${block('Paid Clients', String(totals.paidClients || 0))}
+          ${block('Total Consultations', String(totals.totalConsultations || 0))}
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">Status Mix</h2>
+          ${
+            statuses.length
+              ? statuses.map((s) => `<p>${esc(s.status)}: <span class="text-white">${esc(String(s.count || 0))}</span></p>`).join('')
+              : '<p class="text-slate-400">No status data available.</p>'
+          }
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-emerald-300">Monthly Consultations (6 months)</h2>
+          ${
+            monthly.length
+              ? monthly.map((m) => `<p>${esc(m.month)}: <span class="text-white">${esc(String(m.count || 0))}</span></p>`).join('')
+              : '<p class="text-slate-400">No monthly trend data available.</p>'
+          }
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-amber-300">Client Snapshot</h2>
+          ${
+            clients.length
+              ? `<div class="space-y-1">${clients.slice(0, 20).map((c) => `<p>${esc(c.name || 'Client')} • ${esc(c.email || '—')} • Cases: <span class="text-white">${esc(String(c.consultationCount || 0))}</span> • Paid: <span class="text-white">${esc(String(c.paidConsultationCount || 0))}</span></p>`).join('')}</div>`
+              : '<p class="text-slate-400">No assigned clients yet.</p>'
+          }
+        </div>
+      `;
+    }
+
+    async function renderSpecialistEarningsReport() {
+      const data = await api('/consultations/specialist/revenue');
+      const totals = data && data.totals ? data.totals : {};
+      const payouts = Array.isArray(data && data.payoutRequests) ? data.payoutRequests : [];
+      const ledger = Array.isArray(data && data.ledger) ? data.ledger : [];
+
+      document.getElementById('report-title').textContent = 'Specialist Earnings Report';
+      document.getElementById('report-subtitle').textContent = 'Generated: ' + fmtDate(new Date());
+      document.getElementById('btn-back').href = '/specialist_dashboard.html';
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-emerald-300">Revenue Totals</h2>
+          ${block('Gross (PHP)', Number(totals.grossPhp || 0).toLocaleString())}
+          ${block('Net (PHP)', Number(totals.netPhp || 0).toLocaleString())}
+          ${block('Available Now (PHP)', Number(totals.availableNowPhp || 0).toLocaleString())}
+          ${block('Next Payout Eligible', fmtDate(data && data.nextPayoutEligibleAt))}
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-violet-300">Recent Ledger Entries</h2>
+          ${
+            ledger.length
+              ? `<div class="space-y-1">${ledger.slice(0, 20).map((l) => `<p>Consult #${esc(String(l.consultationId || '—'))} • Net ₱${esc(Number(l.netPhp || 0).toLocaleString())} • ${esc(l.status || '—')} • ${esc(fmtDate(l.releasedAt))}</p>`).join('')}</div>`
+              : '<p class="text-slate-400">No earnings ledger entries yet.</p>'
+          }
+        </div>
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">Payout Requests</h2>
+          ${
+            payouts.length
+              ? `<div class="space-y-1">${payouts.slice(0, 20).map((p) => `<p>#${esc(String(p.payoutRequestId || '—'))} • Net ₱${esc(Number(p.netPhp || 0).toLocaleString())} • ${esc(p.status || '—')} • ${esc(fmtDate(p.requestedAt))}</p>`).join('')}</div>`
+              : '<p class="text-slate-400">No payout requests yet.</p>'
+          }
+        </div>
+      `;
+    }
+
+    async function renderSpecialistClientsReport() {
+      const data = await api('/consultations/specialist/analytics');
+      const clients = Array.isArray(data && data.clients) ? data.clients : [];
+
+      document.getElementById('report-title').textContent = 'Specialist Client Roster Report';
+      document.getElementById('report-subtitle').textContent = 'Generated: ' + fmtDate(new Date());
+      document.getElementById('btn-back').href = '/specialist_dashboard.html';
+      document.getElementById('report-content').innerHTML = `
+        <div class="rounded-lg border border-slate-700 p-4">
+          <h2 class="mb-2 text-lg font-semibold text-cyan-300">Clients</h2>
+          ${
+            clients.length
+              ? `<div class="space-y-2">${clients.map((c) => `<div class="rounded border border-slate-700 bg-slate-900/40 p-2">
+                    <p class="text-white font-medium">${esc(c.name || 'Client')}</p>
+                    <p class="text-slate-300 text-xs">${esc(c.email || '—')}</p>
+                    <p class="text-slate-400 text-xs mt-1">Cases: ${esc(String(c.consultationCount || 0))} • Paid cases: ${esc(String(c.paidConsultationCount || 0))} • Last consult: ${esc(fmtDate(c.lastConsultAt))}</p>
+                  </div>`).join('')}</div>`
+              : '<p class="text-slate-400">No clients available.</p>'
+          }
+        </div>
+      `;
+    }
+
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      const type = (params.get('type') || 'assessment').toLowerCase();
+      const role = ((getUser() || {}).roleName || (getUser() || {}).role || 'user').toLowerCase();
+      const specialistOnly = new Set(['specialist_analytics', 'specialist_earnings', 'specialist_clients']);
+      const userOnly = new Set(['assessment', 'routine', 'consultation']);
+      if (specialistOnly.has(type) && role !== 'specialist') {
+        document.getElementById('report-title').textContent = 'Access denied';
+        document.getElementById('report-subtitle').textContent = 'Specialist-only report type';
+        document.getElementById('report-content').innerHTML =
+          '<p class="text-rose-300">You are not allowed to access this report type.</p>';
+        return;
+      }
+      if (role === 'specialist' && userOnly.has(type)) {
+        document.getElementById('report-title').textContent = 'Access restricted';
+        document.getElementById('report-subtitle').textContent = 'Use specialist report types from Reports hub';
+        document.getElementById('report-content').innerHTML =
+          '<p class="text-amber-300">This report type is part of the user report set. Please open specialist reports instead.</p>';
+        return;
+      }
+      try {
+        if (type === 'consultation') await renderConsultationReport(params);
+        else if (type === 'routine') await renderRoutineReport();
+        else if (type === 'specialist_analytics') await renderSpecialistAnalyticsReport();
+        else if (type === 'specialist_earnings') await renderSpecialistEarningsReport();
+        else if (type === 'specialist_clients') await renderSpecialistClientsReport();
+        else await renderAssessmentReport(params);
+      } catch (err) {
+        document.getElementById('report-content').innerHTML =
+          `<p class="text-rose-300">Failed to generate report: ${esc((err && err.error) || err.message || 'Unknown error')}</p>`;
+      }
+    }
+
+    document.getElementById('btn-print').addEventListener('click', () => window.print());
+    init();
+  </script>
+</body>
+</html>

@@ -68,9 +68,54 @@ function requireAdmin() {
   return true;
 }
 function logout() {
+  clearHairAiResultCache(true);
   setToken(null);
   setUser(null);
   window.location.href = '/login.html';
+}
+
+function getHairAiCacheKey(userId) {
+  const uid = userId || ((getUser() || {}).userId) || 'guest';
+  return `hairAiResult_${uid}`;
+}
+
+function setHairAiResultCache(aiResult, userId) {
+  try {
+    localStorage.setItem(getHairAiCacheKey(userId), JSON.stringify(aiResult || {}));
+    // Remove legacy global key to avoid cross-account bleed.
+    localStorage.removeItem('hairAiResult');
+  } catch (_) {}
+}
+
+function getHairAiResultCache(userId) {
+  try {
+    const scoped = localStorage.getItem(getHairAiCacheKey(userId));
+    if (scoped) return scoped;
+
+    // Migrate legacy key once for current user session.
+    const legacy = localStorage.getItem('hairAiResult');
+    if (legacy) {
+      localStorage.setItem(getHairAiCacheKey(userId), legacy);
+      localStorage.removeItem('hairAiResult');
+      return legacy;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function clearHairAiResultCache(clearAllScoped = false) {
+  try {
+    localStorage.removeItem('hairAiResult');
+    localStorage.removeItem(getHairAiCacheKey());
+    if (clearAllScoped) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('hairAiResult_')) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    }
+  } catch (_) {}
 }
 
 /** Dashboard URL for the current session (marketing / landing redirects use this). */

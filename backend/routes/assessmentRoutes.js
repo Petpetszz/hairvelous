@@ -10,6 +10,8 @@ const { requireAuth } = require('../middleware/auth');
 const { validateAssessment, validateAssessmentId } = require('../middleware/validation');
 
 router.post('/', requireAuth, assessmentController.createAssessment);
+router.post('/verify-capture', requireAuth, assessmentController.verifyCapture);
+router.get('/count', requireAuth, assessmentController.getCount);
 router.post('/:assessmentId/responses', requireAuth, validateAssessment, assessmentController.saveResponses);
 /** Must be before /:assessmentId/results or "latest" is captured as a param and becomes NaN. */
 router.get('/latest/results', requireAuth, assessmentController.getLatestResults);

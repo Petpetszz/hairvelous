@@ -222,7 +222,7 @@
         });
 
         // Store in localStorage so results page can also show it
-        localStorage.setItem('hairAiResult', JSON.stringify(aiResult));
+        setHairAiResultCache(aiResult);
 
         // Display inline
         renderAiResult(aiResult);

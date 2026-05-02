@@ -18,34 +18,93 @@
 
     <div id="quiz-container" class="space-y-8">
       <div id="quiz-questions" class="space-y-6"></div>
-      <!-- Photo upload: shown only as the last step after all questions -->
+      <!-- Guided scalp capture: shown only as the last step after all questions -->
       <div id="photo-upload-section" class="hidden bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-        <h2 class="text-lg font-semibold text-white mb-2">AI Hair Identifier (Optional)</h2>
-        <p class="text-slate-400 text-sm mb-3">
-          In this last step, you can upload a hair/scalp photo so our <span class="text-violet-300 font-medium">HairAI</span>
-          assistant can combine your assessment answers with the image to suggest likely hair/scalp conditions and product types.
-          This is for awareness only and is <span class="font-semibold">not a medical diagnosis</span>. You can skip this and still finish the assessment.
+        <h2 id="capture-title" class="text-lg font-semibold text-white mb-2">Scalp Image Capture (Required)</h2>
+        <p id="capture-description" class="text-slate-400 text-sm mb-4">
+          Upload the required scalp angles so HairAI can focus on the right area. Assessment completion is locked
+          until all required shots are provided. This is for awareness only and is
+          <span class="font-semibold">not a medical diagnosis</span>.
         </p>
-        <div class="mb-4">
-          <label for="photo" class="block text-sm text-slate-300 mb-2">Choose image (single photo)</label>
-          <input type="file" id="photo" accept="image/jpeg,image/png,image/gif,image/webp" class="text-slate-300 text-sm" />
+        <p id="capture-plan-pill" class="inline-flex items-center rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs text-violet-200 mb-4">
+          Free Plan: 4-angle image upload
+        </p>
+
+        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+          <button type="button" class="capture-step-btn rounded-lg border border-slate-600 px-3 py-2 text-left text-xs" data-shot="top_crown">
+            <span class="block text-slate-200 font-medium">Top/Crown</span>
+            <span class="capture-step-status text-slate-400" data-shot-status="top_crown">Pending</span>
+          </button>
+          <button type="button" class="capture-step-btn rounded-lg border border-slate-600 px-3 py-2 text-left text-xs" data-shot="back_head">
+            <span class="block text-slate-200 font-medium">Back of Head</span>
+            <span class="capture-step-status text-slate-400" data-shot-status="back_head">Pending</span>
+          </button>
+          <button type="button" class="capture-step-btn rounded-lg border border-slate-600 px-3 py-2 text-left text-xs" data-shot="left_side">
+            <span class="block text-slate-200 font-medium">Left Side</span>
+            <span class="capture-step-status text-slate-400" data-shot-status="left_side">Pending</span>
+          </button>
+          <button type="button" class="capture-step-btn rounded-lg border border-slate-600 px-3 py-2 text-left text-xs" data-shot="right_side">
+            <span class="block text-slate-200 font-medium">Right Side</span>
+            <span class="capture-step-status text-slate-400" data-shot-status="right_side">Pending</span>
+          </button>
         </div>
-        <div id="photo-preview-wrap" class="mb-4 hidden rounded-lg border border-slate-600 bg-slate-900/50 p-3">
-          <p class="mb-2 text-xs text-slate-500">Preview</p>
-          <img id="photo-preview-img" src="" alt="Selected photo preview" class="mx-auto max-h-52 w-full rounded-md object-contain" />
+
+        <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-3 mb-3">
+          <p id="capture-active-instruction" class="text-sm text-violet-200 mb-2">Selected: Top/Crown</p>
+          <div class="relative rounded-lg overflow-hidden border border-slate-700 bg-black">
+            <video id="capture-video" class="w-full max-h-[360px] object-contain hidden" autoplay muted playsinline></video>
+            <div id="capture-video-placeholder" class="h-56 flex items-center justify-center text-slate-500 text-sm">Live camera is available on Pro plan.</div>
+          </div>
+          <p id="capture-live-hint" class="mt-2 text-xs text-slate-400">Start camera and align scalp area in frame.</p>
         </div>
-        <div class="bg-slate-900/50 rounded-lg p-4 text-sm text-slate-400">
-          <p class="font-medium text-slate-300 mb-2">Tips for best photo quality:</p>
-          <ul class="list-disc list-inside space-y-1">
-            <li>Use natural lighting</li>
-            <li>For now, upload one clear angle only (front, side, or back)</li>
-            <li>If needed, choose a different angle and upload again before completing</li>
-            <li>Ensure hair is clean and dry</li>
-            <li>Avoid filters or heavy editing</li>
-            <li>Focus on hair texture and scalp visibility</li>
-          </ul>
+
+        <div id="capture-camera-controls" class="hidden flex flex-wrap items-center gap-2 mb-3">
+          <button type="button" id="btn-start-camera" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm">Start camera</button>
+          <button type="button" id="btn-capture-shot" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm" disabled>Capture selected shot</button>
+          <button type="button" id="btn-capture-relaxed" class="hidden bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm">Use this capture anyway</button>
+          <button type="button" id="btn-stop-camera" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm" disabled>Stop camera</button>
         </div>
-        <button type="button" id="btn-upload-photo" class="mt-4 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm">Upload Photo</button>
+
+        <div id="capture-upload-controls" class="mb-3">
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <label class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-200">
+              Top/Crown
+              <input type="file" accept="image/*" data-shot-upload="top_crown" class="mt-2 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-violet-600 file:px-2 file:py-1 file:text-white hover:file:bg-violet-500" />
+            </label>
+            <label class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-200">
+              Back of Head
+              <input type="file" accept="image/*" data-shot-upload="back_head" class="mt-2 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-violet-600 file:px-2 file:py-1 file:text-white hover:file:bg-violet-500" />
+            </label>
+            <label class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-200">
+              Left Side
+              <input type="file" accept="image/*" data-shot-upload="left_side" class="mt-2 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-violet-600 file:px-2 file:py-1 file:text-white hover:file:bg-violet-500" />
+            </label>
+            <label class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-200">
+              Right Side
+              <input type="file" accept="image/*" data-shot-upload="right_side" class="mt-2 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-violet-600 file:px-2 file:py-1 file:text-white hover:file:bg-violet-500" />
+            </label>
+          </div>
+          <p class="mt-2 text-xs text-slate-400">Free plan uses image upload. Upgrade to Pro for guided live camera verification.</p>
+        </div>
+
+        <div id="capture-preview-grid" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-2">
+            <p class="text-[11px] text-slate-400 mb-1">Top/Crown</p>
+            <img id="preview-top_crown" class="hidden w-full h-24 rounded object-cover" alt="Top/crown preview" />
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-2">
+            <p class="text-[11px] text-slate-400 mb-1">Back of Head</p>
+            <img id="preview-back_head" class="hidden w-full h-24 rounded object-cover" alt="Back of head preview" />
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-2">
+            <p class="text-[11px] text-slate-400 mb-1">Left Side</p>
+            <img id="preview-left_side" class="hidden w-full h-24 rounded object-cover" alt="Left side preview" />
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-2">
+            <p class="text-[11px] text-slate-400 mb-1">Right Side</p>
+            <img id="preview-right_side" class="hidden w-full h-24 rounded object-cover" alt="Right side preview" />
+          </div>
+        </div>
       </div>
       <div id="quiz-actions" class="flex gap-4">
         <button type="button" id="btn-prev" class="hidden bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg">Previous</button>
@@ -134,6 +193,32 @@
 
     let currentIndex = 0;
     let responses = {};
+    let captureMode = 'free_upload';
+    const requiredShots = ['top_crown', 'back_head', 'left_side', 'right_side'];
+    const shotLabels = {
+      top_crown: 'Top/Crown Scalp',
+      back_head: 'Back of Head',
+      left_side: 'Left Side',
+      right_side: 'Right Side',
+    };
+    const shotInstructions = {
+      top_crown: 'Point camera at the top/crown area. Keep scalp centered and fully visible.',
+      back_head: 'Capture the back scalp area. Keep full back head within frame.',
+      left_side: 'Capture the left side scalp/hair area with even lighting.',
+      right_side: 'Capture the right side scalp/hair area with even lighting.',
+    };
+    const captureState = {
+      activeShot: 'top_crown',
+      stream: null,
+      pendingRelaxedShot: null,
+      isCapturing: false,
+      shots: {
+        top_crown: null,
+        back_head: null,
+        left_side: null,
+        right_side: null,
+      },
+    };
 
     function renderQuestion() {
       const container = document.getElementById('quiz-questions');
@@ -142,7 +227,7 @@
       const btnNext = document.getElementById('btn-next');
       const btnComplete = document.getElementById('btn-complete');
 
-      // Last step: show photo upload (optional), then Complete
+      // Last step: show guided scalp capture, then Complete
       if (currentIndex === questions.length) {
         container.innerHTML = '';
         container.classList.add('hidden');
@@ -150,6 +235,10 @@
         btnPrev.classList.remove('hidden');
         btnNext.classList.add('hidden');
         btnComplete.classList.remove('hidden');
+        btnComplete.textContent = allRequiredShotsCaptured() ? 'Complete assessment' : 'Complete assessment (capture required shots)';
+        btnComplete.disabled = !allRequiredShotsCaptured();
+        applyCaptureModeUi();
+        updateCaptureUi();
         return;
       }
 
@@ -248,6 +337,300 @@
       btnComplete.classList.add('hidden');
     }
 
+    function allRequiredShotsCaptured() {
+      return requiredShots.every((k) => !!captureState.shots[k]);
+    }
+
+    function updateCaptureUi() {
+      const instruction = document.getElementById('capture-active-instruction');
+      const liveHint = document.getElementById('capture-live-hint');
+      if (instruction) instruction.textContent = 'Selected: ' + shotLabels[captureState.activeShot];
+      if (liveHint) {
+        liveHint.textContent = captureMode === 'pro_live'
+          ? (shotInstructions[captureState.activeShot] || '')
+          : 'Upload clear photos for each required angle in bright, even lighting.';
+      }
+      document.querySelectorAll('.capture-step-btn').forEach((btn) => {
+        const shot = btn.getAttribute('data-shot');
+        const active = shot === captureState.activeShot;
+        btn.classList.toggle('border-violet-500', active);
+        btn.classList.toggle('bg-violet-950/40', active);
+      });
+      requiredShots.forEach((shot) => {
+        const statusEl = document.querySelector('[data-shot-status="' + shot + '"]');
+        if (!statusEl) return;
+        if (captureState.shots[shot]) {
+          statusEl.textContent = 'Passed';
+          statusEl.className = 'capture-step-status text-emerald-300';
+        } else {
+          statusEl.textContent = 'Pending';
+          statusEl.className = 'capture-step-status text-slate-400';
+        }
+        const img = document.getElementById('preview-' + shot);
+        if (img) {
+          if (captureState.shots[shot]) {
+            img.src = captureState.shots[shot].dataUrl;
+            img.classList.remove('hidden');
+          } else {
+            img.removeAttribute('src');
+            img.classList.add('hidden');
+          }
+        }
+      });
+      const btnComplete = document.getElementById('btn-complete');
+      const relaxedBtn = document.getElementById('btn-capture-relaxed');
+      const captureBtn = document.getElementById('btn-capture-shot');
+      const uploadInputs = document.querySelectorAll('[data-shot-upload]');
+      if (captureBtn) {
+        captureBtn.disabled = captureMode !== 'pro_live' || !captureState.stream || captureState.isCapturing;
+        captureBtn.textContent = captureState.isCapturing ? 'Capturing…' : 'Capture selected shot';
+      }
+      uploadInputs.forEach((el) => {
+        el.disabled = captureMode !== 'free_upload';
+      });
+      if (liveHint && captureState.isCapturing) {
+        liveHint.textContent = 'Processing capture... please wait.';
+      }
+      if (relaxedBtn) relaxedBtn.classList.toggle('hidden', !captureState.pendingRelaxedShot);
+      if (btnComplete && currentIndex === questions.length) {
+        btnComplete.disabled = !allRequiredShotsCaptured();
+        btnComplete.textContent = allRequiredShotsCaptured()
+          ? 'Complete assessment'
+          : 'Complete assessment (capture required shots)';
+      }
+    }
+
+    async function startCaptureCamera() {
+      if (captureMode !== 'pro_live') {
+        showToast('Live camera verifier is available on Pro plan.', 'info');
+        return;
+      }
+      if (captureState.stream) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        captureState.stream = stream;
+        const video = document.getElementById('capture-video');
+        const placeholder = document.getElementById('capture-video-placeholder');
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        document.getElementById('btn-stop-camera').disabled = false;
+        updateCaptureUi();
+      } catch (err) {
+        showToast('Unable to access camera. Please allow permissions.', 'error');
+      }
+    }
+
+    function stopCaptureCamera() {
+      if (!captureState.stream) return;
+      captureState.stream.getTracks().forEach((t) => t.stop());
+      captureState.stream = null;
+      const video = document.getElementById('capture-video');
+      const placeholder = document.getElementById('capture-video-placeholder');
+      video.srcObject = null;
+      video.classList.add('hidden');
+      placeholder.classList.remove('hidden');
+      document.getElementById('btn-stop-camera').disabled = true;
+      updateCaptureUi();
+    }
+
+    async function handleShotUpload(shot, file) {
+      if (!requiredShots.includes(shot) || !file) return;
+      if (!file.type || !file.type.startsWith('image/')) {
+        showToast('Please upload an image file for ' + shotLabels[shot], 'error');
+        return;
+      }
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      captureState.shots[shot] = {
+        blob: file,
+        dataUrl,
+        mimeType: file.type || 'image/jpeg',
+      };
+      captureState.pendingRelaxedShot = null;
+      showToast(shotLabels[shot] + ' uploaded.', 'success');
+      const nextMissing = requiredShots.find((k) => !captureState.shots[k]);
+      if (nextMissing) captureState.activeShot = nextMissing;
+      updateCaptureUi();
+    }
+
+    function applyCaptureModeUi() {
+      const isProLive = captureMode === 'pro_live';
+      const title = document.getElementById('capture-title');
+      const desc = document.getElementById('capture-description');
+      const pill = document.getElementById('capture-plan-pill');
+      const cameraControls = document.getElementById('capture-camera-controls');
+      const uploadControls = document.getElementById('capture-upload-controls');
+      const video = document.getElementById('capture-video');
+      const placeholder = document.getElementById('capture-video-placeholder');
+      const hint = document.getElementById('capture-live-hint');
+
+      if (title) {
+        title.textContent = isProLive
+          ? 'Guided Live Scalp Capture (Required)'
+          : 'Scalp Image Upload (Required)';
+      }
+      if (desc) {
+        desc.innerHTML = isProLive
+          ? 'Capture the required scalp angles with live verifier so HairAI can focus on the right area. Assessment completion is locked until all required shots pass quality checks. This is for awareness only and is <span class="font-semibold">not a medical diagnosis</span>.'
+          : 'Upload the required scalp angles (top, back, left, right) so HairAI can focus on the right area. Assessment completion is locked until all required shots are provided. This is for awareness only and is <span class="font-semibold">not a medical diagnosis</span>.';
+      }
+      if (pill) {
+        pill.textContent = isProLive
+          ? 'Pro Plan: Guided live camera verifier'
+          : 'Free Plan: 4-angle image upload';
+      }
+      if (cameraControls) cameraControls.classList.toggle('hidden', !isProLive);
+      if (uploadControls) uploadControls.classList.toggle('hidden', isProLive);
+      if (hint) {
+        hint.textContent = isProLive
+          ? (shotInstructions[captureState.activeShot] || '')
+          : 'Upload clear photos for each required angle in bright, even lighting.';
+      }
+
+      if (!isProLive) {
+        stopCaptureCamera();
+        if (video) video.classList.add('hidden');
+        if (placeholder) {
+          placeholder.classList.remove('hidden');
+          placeholder.textContent = 'Live camera is available on Pro plan.';
+        }
+      } else if (placeholder) {
+        placeholder.textContent = 'Camera preview will appear here';
+      }
+    }
+
+    function evaluateCaptureQuality(canvas, ctx) {
+      const { width, height } = canvas;
+      const img = ctx.getImageData(0, 0, width, height);
+      const data = img.data;
+      let sumLuma = 0;
+      let edgeScore = 0;
+      let darkPixels = 0;
+      const pixels = width * height;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        sumLuma += l;
+        if (l < 55) darkPixels++;
+      }
+      for (let y = 1; y < height - 1; y += 2) {
+        for (let x = 1; x < width - 1; x += 2) {
+          const idx = (y * width + x) * 4;
+          const l0 = 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
+          const idxR = (y * width + (x + 1)) * 4;
+          const lr = 0.2126 * data[idxR] + 0.7152 * data[idxR + 1] + 0.0722 * data[idxR + 2];
+          const idxD = ((y + 1) * width + x) * 4;
+          const ld = 0.2126 * data[idxD] + 0.7152 * data[idxD + 1] + 0.0722 * data[idxD + 2];
+          edgeScore += Math.abs(l0 - lr) + Math.abs(l0 - ld);
+        }
+      }
+      const avgLuma = sumLuma / pixels;
+      const blurMetric = Math.min(1, edgeScore / (pixels * 9));
+      const darkRatio = darkPixels / pixels;
+      const checks = {
+        lighting: avgLuma >= 45 && avgLuma <= 220,
+        sharpness: blurMetric >= 0.11,
+        hairPresence: darkRatio >= 0.08,
+      };
+      const tips = [];
+      if (!checks.lighting) tips.push('Improve lighting and avoid harsh shadows.');
+      if (!checks.sharpness) tips.push('Keep the camera steady and focus before capture.');
+      if (!checks.hairPresence) tips.push('Move closer so scalp/hair area fills the frame.');
+      return {
+        pass: checks.lighting && checks.sharpness && checks.hairPresence,
+        checks,
+        tips,
+      };
+    }
+
+    async function captureSelectedShot() {
+      if (captureState.isCapturing) return;
+      const video = document.getElementById('capture-video');
+      if (!captureState.stream || !video || video.readyState < 2) {
+        showToast('Start camera first.', 'error');
+        return;
+      }
+      captureState.isCapturing = true;
+      updateCaptureUi();
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const quality = evaluateCaptureQuality(canvas, ctx);
+      if (!quality.pass) {
+        captureState.isCapturing = false;
+        updateCaptureUi();
+        showToast('Capture failed quality check: ' + quality.tips.join(' '), 'error');
+        return;
+      }
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      try {
+        const serverCheck = await api('/assessments/verify-capture', {
+          method: 'POST',
+          body: JSON.stringify({ imageBase64: dataUrl, shotType: captureState.activeShot }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!serverCheck || serverCheck.pass !== true) {
+          const tips = serverCheck && Array.isArray(serverCheck.tips) && serverCheck.tips.length
+            ? serverCheck.tips.join(' ')
+            : 'Retake with better scalp visibility and lighting.';
+          captureState.pendingRelaxedShot = {
+            shot: captureState.activeShot,
+            blob,
+            dataUrl,
+            mimeType: 'image/jpeg',
+          };
+          captureState.isCapturing = false;
+          updateCaptureUi();
+          showToast('Verifier flagged this shot: ' + tips + ' You can retake or use this capture anyway.', 'error');
+          return;
+        }
+      } catch (err) {
+        captureState.isCapturing = false;
+        updateCaptureUi();
+        showToast((err && err.error) || 'Could not validate capture on server.', 'error');
+        return;
+      }
+      captureState.pendingRelaxedShot = null;
+      captureState.shots[captureState.activeShot] = {
+        blob,
+        dataUrl,
+        mimeType: 'image/jpeg',
+      };
+      captureState.isCapturing = false;
+      showToast(shotLabels[captureState.activeShot] + ' captured.', 'success');
+      const nextMissing = requiredShots.find((k) => !captureState.shots[k]);
+      if (nextMissing) captureState.activeShot = nextMissing;
+      updateCaptureUi();
+    }
+
+    function acceptPendingRelaxedShot() {
+      const pending = captureState.pendingRelaxedShot;
+      if (!pending) return;
+      captureState.shots[pending.shot] = {
+        blob: pending.blob,
+        dataUrl: pending.dataUrl,
+        mimeType: pending.mimeType,
+      };
+      captureState.pendingRelaxedShot = null;
+      const nextMissing = requiredShots.find((k) => !captureState.shots[k]);
+      if (nextMissing) captureState.activeShot = nextMissing;
+      showToast('Capture accepted. You can continue with the next angle.', 'success');
+      updateCaptureUi();
+    }
+
     function getCurrentResponse() {
       const q = questions[currentIndex];
       if (!q) return null;
@@ -328,6 +711,10 @@
 
     async function complete() {
       await saveResponse();
+      if (!allRequiredShotsCaptured()) {
+        showToast('Please capture all required scalp shots first.', 'error');
+        return;
+      }
       if (!isLoggedIn()) {
         document.getElementById('quiz-container').classList.add('hidden');
         document.getElementById('login-prompt').classList.remove('hidden');
@@ -355,106 +742,42 @@
         });
 
         showToast('Assessment saved!', 'success');
-
-        // Check if a photo was selected – if so, upload + analyze before redirecting
-        const file = document.getElementById('photo').files[0];
-        if (file) {
-          await uploadAndAnalyzePhoto(file, savedAssessmentId);
-        } else {
-          window.location.href = '/hair-profile.html?assessmentId=' + savedAssessmentId;
-        }
+        await uploadAndAnalyzeGuidedShots(savedAssessmentId);
       } catch (err) {
         showToast(err.error || 'Failed to complete', 'error');
       }
     }
 
-    async function uploadAndAnalyzePhoto(file, assessmentId) {
-      // Show loading state
+    async function uploadAndAnalyzeGuidedShots(assessmentId) {
       const btn = document.getElementById('btn-complete');
-      const uploadBtn = document.getElementById('btn-upload-photo');
       if (btn) { btn.disabled = true; btn.textContent = 'Analyzing photo…'; }
-      if (uploadBtn) { uploadBtn.disabled = true; }
 
       try {
-        // Read file as base64 for AI analysis
-        const imageBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        for (const shot of requiredShots) {
+          const saved = captureState.shots[shot];
+          if (!saved || !saved.blob) throw new Error('Missing required shot: ' + shotLabels[shot]);
+          const formData = new FormData();
+          formData.append('photo', saved.blob, shot + '.jpg');
+          await apiForm('/photos', formData);
+        }
 
-        // Upload photo to server
-        const formData = new FormData();
-        formData.append('photo', file);
-        await apiForm('/photos', formData);
-
-        showToast('Photo uploaded, running AI analysis…', 'info');
-
-        // Call AI analyze endpoint – assessment answers are already saved in DB,
-        // so the backend will automatically fetch them for context
+        showToast('Scalp shots uploaded, running AI analysis…', 'info');
+        const issueShot = captureState.shots.top_crown || captureState.shots.back_head;
         const aiResult = await api('/hair-ai/analyze', {
           method: 'POST',
-          body: JSON.stringify({ imageBase64 }),
+          body: JSON.stringify({ imageBase64: issueShot.dataUrl }),
           headers: { 'Content-Type': 'application/json' },
         });
-
-        // Store AI result in localStorage so results page can display it
-        localStorage.setItem('hairAiResult', JSON.stringify(aiResult));
+        setHairAiResultCache(aiResult);
         showToast('AI analysis complete!', 'success');
       } catch (err) {
-        console.error('Photo/AI error:', err);
-        showToast((err && err.error) || 'Photo analysis failed – continuing to results.', 'error');
-        // Clear any stale AI result so results page doesn't show old data
-        localStorage.removeItem('hairAiResult');
+        console.error('Guided capture/AI error:', err);
+        showToast((err && err.error) || err.message || 'Photo analysis failed – continuing to results.', 'error');
+        clearHairAiResultCache();
       } finally {
         window.location.href = '/results.html?assessmentId=' + assessmentId;
       }
     }
-
-    // "Upload Photo" button: standalone upload + AI analyze (before completing assessment)
-    document.getElementById('btn-upload-photo')?.addEventListener('click', async () => {
-      const file = document.getElementById('photo').files[0];
-      if (!file) { showToast('Select a file first', 'error'); return; }
-      if (!isLoggedIn()) { showToast('Please login first', 'error'); return; }
-
-      const btn = document.getElementById('btn-upload-photo');
-      btn.disabled = true;
-      btn.textContent = 'Uploading…';
-
-      try {
-        const imageBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        const formData = new FormData();
-        formData.append('photo', file);
-        await apiForm('/photos', formData);
-
-        showToast('Photo uploaded, analyzing with AI…', 'info');
-        btn.textContent = 'Analyzing…';
-
-        // If assessment already saved, AI will use it; otherwise it uses whatever is in DB
-        const aiResult = await api('/hair-ai/analyze', {
-          method: 'POST',
-          body: JSON.stringify({ imageBase64 }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        localStorage.setItem('hairAiResult', JSON.stringify(aiResult));
-        showToast('AI analysis complete! You can upload another angle or click "Complete assessment".', 'success');
-        btn.disabled = false;
-        btn.textContent = 'Upload another photo';
-      } catch (err) {
-        console.error('Photo/AI error:', err);
-        showToast((err && err.error) || 'Upload/Analysis failed', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Upload Photo';
-      }
-    });
 
     function escapeHtml(s) {
       const d = document.createElement('div');
@@ -462,31 +785,56 @@
       return d.innerHTML;
     }
 
-    let assessmentPhotoPreviewUrl = '';
-    document.getElementById('photo').addEventListener('change', (e) => {
-      const f = e.target.files && e.target.files[0];
-      const wrap = document.getElementById('photo-preview-wrap');
-      const img = document.getElementById('photo-preview-img');
-      if (assessmentPhotoPreviewUrl) {
-        URL.revokeObjectURL(assessmentPhotoPreviewUrl);
-        assessmentPhotoPreviewUrl = '';
-      }
-      if (!f || !/^image\//.test(f.type)) {
-        wrap.classList.add('hidden');
-        img.removeAttribute('src');
-        return;
-      }
-      assessmentPhotoPreviewUrl = URL.createObjectURL(f);
-      img.src = assessmentPhotoPreviewUrl;
-      wrap.classList.remove('hidden');
-    });
-
     (function init() {
       if (!questions.length) return;
+      (async () => {
+        try {
+          if (isLoggedIn()) {
+            const statusResp = await api('/billing/status');
+            if (statusResp && statusResp.status && statusResp.status.isPro) {
+              captureMode = 'pro_live';
+            } else {
+              captureMode = 'free_upload';
+            }
+          } else {
+            captureMode = 'free_upload';
+          }
+        } catch (_e) {
+          captureMode = 'free_upload';
+        }
+        applyCaptureModeUi();
+        updateCaptureUi();
+      })();
+      document.querySelectorAll('.capture-step-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const shot = btn.getAttribute('data-shot');
+          if (!shot || !requiredShots.includes(shot)) return;
+          captureState.activeShot = shot;
+          updateCaptureUi();
+        });
+      });
+      document.querySelectorAll('[data-shot-upload]').forEach((input) => {
+        input.addEventListener('change', async (e) => {
+          const shot = input.getAttribute('data-shot-upload');
+          const file = e.target && e.target.files && e.target.files[0];
+          try {
+            await handleShotUpload(shot, file);
+          } catch (_err) {
+            showToast('Failed to read uploaded image for ' + shotLabels[shot], 'error');
+          } finally {
+            input.value = '';
+          }
+        });
+      });
+      document.getElementById('btn-start-camera')?.addEventListener('click', startCaptureCamera);
+      document.getElementById('btn-stop-camera')?.addEventListener('click', stopCaptureCamera);
+      document.getElementById('btn-capture-shot')?.addEventListener('click', captureSelectedShot);
+      document.getElementById('btn-capture-relaxed')?.addEventListener('click', acceptPendingRelaxedShot);
       renderQuestion();
       document.getElementById('btn-next').onclick = next;
       document.getElementById('btn-prev').onclick = prev;
       document.getElementById('btn-complete').onclick = complete;
+      updateCaptureUi();
     })();
   </script>
 </body>

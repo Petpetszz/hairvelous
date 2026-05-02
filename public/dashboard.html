@@ -50,6 +50,10 @@
             <p class="text-white font-medium">Routine Tracker</p>
             <p class="text-slate-400 text-xs">Log photo/video progress</p>
           </a>
+          <a href="/reports.html" class="block mini-tile px-4 py-3 hover:border-violet-400/60">
+            <p class="text-white font-medium">Reports</p>
+            <p class="text-slate-400 text-xs">Generate assessment and routine reports</p>
+          </a>
           <a id="consult-link" href="/consultations.html" class="block mini-tile px-4 py-3 hover:border-violet-400/60">
             <p class="text-white font-medium">Consultations</p>
             <p class="text-slate-400 text-xs">Get specialist guidance</p>
@@ -250,6 +254,7 @@
       const billingStatus = await loadPlanIndicator();
       consumePlanFlash(billingStatus);
       let hasProfile = false;
+      let assessmentCount = 0;
       let recCount = 0;
       let routineCount = 0;
       let consultCount = 0;
@@ -289,6 +294,14 @@
           `;
         }
       } catch (_err) {}
+
+      try {
+        const ass = await api('/assessments/count');
+        assessmentCount = Number(ass && ass.count) || 0;
+      } catch (_err) {
+        // If count endpoint is temporarily unavailable, keep dashboard useful.
+        assessmentCount = hasProfile ? 1 : 0;
+      }
 
       try {
         let recs = await api('/recommendations/saved');
@@ -393,7 +406,7 @@
         }
       } catch (_err) {}
 
-      document.getElementById('stat-assessment').textContent = hasProfile ? '1' : '0';
+      document.getElementById('stat-assessment').textContent = String(assessmentCount);
       document.getElementById('stat-recs').textContent = String(recCount);
       document.getElementById('stat-routine').textContent = String(routineCount);
       document.getElementById('stat-consults').textContent = String(consultCount);
